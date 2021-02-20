@@ -1,0 +1,155 @@
+---
+title: "Mendelian randomisation: Critical Covid-19 as exposure for stroke"
+author: "Verena Zuber"
+date: "20/02/2021"
+output: pdf_document
+highlight: tango
+---
+
+
+# 1. Preparation
+
+
+Load the MendelianRandomization package for the Mendelian randomization (MR) analysis, metafor for the forestplots, cowplot for plotting and knitr and markdown for compilation.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+library(MendelianRandomization)
+library(metafor)
+library(cowplot)
+#library(knitr)
+#library(markdown)
+#library(rmarkdown)
+```
+
+Load the data which is provided in the Supplmentary Table 2 available from this github repository.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+data = read.csv("SupplementaryTable2.csv", stringsAsFactors=FALSE)
+```
+
+This dataset contains summary-level information on genetic associations with the exposure:
+- Critical Covid-19: beta_A2, se_A2, pval (from release 5 of https://www.covid19hg.org/results/r5/)
+and ischemic stroke outcomes including
+- Ischemic stroke (AIS): beta_ais, se_ais, p_ais
+- Cardioembolic stroke (CES): beta_ces, se_ces, p_ces
+- Large artery stroke (LAS): beta_las, se_las, p_las
+- Small vessel stroke (SVS): beta_svs, se_svs, p_svs
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+dim(data)
+head(data, n=5)
+```
+
+
+# 2. Main analysis
+
+Defining the mr_input objects for each exposure.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+mr_ais = mr_input(bx = data$beta_A2,bxse = data$se_A2, by = data$beta_ais, byse = data$se_ais)
+mr_ces = mr_input(bx = data$beta_A2,bxse = data$se_A2, by = data$beta_ces, byse = data$se_ces)
+mr_las = mr_input(bx = data$beta_A2,bxse = data$se_A2, by = data$beta_las, byse = data$se_las)
+mr_svs = mr_input(bx = data$beta_A2,bxse = data$se_A2, by = data$beta_svs, byse = data$se_svs)
+```
+
+Compute the inverse-variance weighted (IVW) MR estimate.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+ivw_ais = mr_ivw(mr_ais)
+ivw_ces = mr_ivw(mr_ces)
+ivw_las = mr_ivw(mr_las)
+ivw_svs = mr_ivw(mr_svs)
+```
+
+IVW results including MR estimates, their standard error, confidence interval and heterogeniety statistics.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+tableIVW = matrix(nrow=4, ncol=7)
+colnames(tableIVW) = c("Estimate","StdError","CILower","CIUpper","Pvalue","Q-stat", "Heter.Pvalue")
+rownames(tableIVW) = c("Ischemic stroke","Cardioembolic stroke","Large artery stroke","Small vessel stroke")
+tableIVW[1,] = c(ivw_ais$Estimate, ivw_ais$StdError, ivw_ais$CILower, ivw_ais$CIUpper, ivw_ais$Pvalue, ivw_ais$Heter.Stat)
+tableIVW[2,] = c(ivw_ces$Estimate, ivw_ces$StdError, ivw_ces$CILower, ivw_ces$CIUpper, ivw_ces$Pvalue, ivw_ces$Heter.Stat)
+tableIVW[3,] = c(ivw_las$Estimate, ivw_las$StdError, ivw_las$CILower, ivw_las$CIUpper, ivw_las$Pvalue, ivw_las$Heter.Stat)
+tableIVW[4,] = c(ivw_svs$Estimate, ivw_svs$StdError, ivw_svs$CILower, ivw_svs$CIUpper, ivw_svs$Pvalue, ivw_svs$Heter.Stat)
+tableIVW
+```
+
+Figure 2: Forest plot of MR estimates. 
+
+```{r echo=FALSE, include = TRUE, fig.height = 6, fig.width = 8}
+tableIVW = as.data.frame(tableIVW)
+tableIVW$Pvalue = round(tableIVW$Pvalue, digits=3)
+tableIVW$Heter.Pvalue = round(tableIVW$Heter.Pvalue, digits=3)
+forest(x=tableIVW$Estimate,ci.lb=tableIVW$CILower, ci.ub=tableIVW$CIUpper,refline=1,xlab="Odds ratio",slab=rownames(tableIVW),transf=exp, digits=3L, top=1, 
+	ilab=cbind(tableIVW$Pvalue, tableIVW$Heter.Pvalue), ilab.xpos=c(0.852,0.922), ilab.pos=4, xlim=c(0.7,1.3))
+text(c(0.7,0.85,0.92,1.166), 4.4, pos=4, c("Outcome","Pvalue","Het.Pvalue", "Estimate [CI]"),font=2)
+```
+
+Supplementary Figure 1: Scatterplots of genetic association with the exposure (critical Covid-19) against the genetic association with the outcome (ischemic stroke).
+
+```{r echo=FALSE, include = TRUE, fig.height = 14, fig.width = 14}
+m1 = mr_plot(mr_ais, interactive = FALSE)
+m2 = mr_plot(mr_ces, interactive = FALSE)
+m3 = mr_plot(mr_las, interactive = FALSE)
+m4 = mr_plot(mr_svs, interactive = FALSE)
+plot_grid(m1,m2,m3,m4, labels = c('A', 'B', 'C', 'D'),nrow = 2, ncol = 2)
+```
+
+
+# 3. Sensitivity (Pleiotropy robust approaches) 
+
+Compute the inverse-variance weighted (IVW) MR estimate.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+sensitivity_ais = mr_allmethods(mr_ais, method = "main")
+sensitivity_ces = mr_allmethods(mr_ces, method = "main")
+sensitivity_las = mr_allmethods(mr_las, method = "main")
+sensitivity_svs = mr_allmethods(mr_svs, method = "main")
+sensitivity = rbind(sensitivity_ais$Values,sensitivity_ces$Values, sensitivity_las$Values, sensitivity_svs$Values)
+sensitivity
+```
+
+# 4. Sensitivity (Genome-wide significant IVs)
+
+Defining the mr_input objects for each exposure on genome-wide significant genetic variants as instrumental variables only.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+data = data[data$pval<5e-8,]
+dim(data)
+mr2_ais = mr_input(bx = data$beta_A2,bxse = data$se_A2, by = data$beta_ais, byse = data$se_ais)
+mr2_ces = mr_input(bx = data$beta_A2,bxse = data$se_A2, by = data$beta_ces, byse = data$se_ces)
+mr2_las = mr_input(bx = data$beta_A2,bxse = data$se_A2, by = data$beta_las, byse = data$se_las)
+mr2_svs = mr_input(bx = data$beta_A2,bxse = data$se_A2, by = data$beta_svs, byse = data$se_svs)
+```
+
+IVW results including MR estimates, their standard error, confidence interval and heterogeniety statistics.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+ivw2_ais = mr_ivw(mr2_ais)
+ivw2_ces = mr_ivw(mr2_ces)
+ivw2_las = mr_ivw(mr2_las)
+ivw2_svs = mr_ivw(mr2_svs)
+table2IVW = matrix(nrow=4, ncol=7)
+colnames(table2IVW) = c("Estimate","StdError","CILower","CIUpper","Pvalue","Q-stat", "Heter.Pvalue")
+rownames(table2IVW) = c("Ischemic stroke","Cardioembolic stroke","Large artery stroke","Small vessel stroke")
+table2IVW[1,] = c(ivw2_ais$Estimate, ivw2_ais$StdError, ivw2_ais$CILower, ivw2_ais$CIUpper, ivw2_ais$Pvalue, ivw2_ais$Heter.Stat)
+table2IVW[2,] = c(ivw2_ces$Estimate, ivw2_ces$StdError, ivw2_ces$CILower, ivw2_ces$CIUpper, ivw2_ces$Pvalue, ivw2_ces$Heter.Stat)
+table2IVW[3,] = c(ivw2_las$Estimate, ivw2_las$StdError, ivw2_las$CILower, ivw2_las$CIUpper, ivw2_las$Pvalue, ivw2_las$Heter.Stat)
+table2IVW[4,] = c(ivw2_svs$Estimate, ivw2_svs$StdError, ivw2_svs$CILower, ivw2_svs$CIUpper, ivw2_svs$Pvalue, ivw2_svs$Heter.Stat)
+table2IVW
+```
+
+Supplementary Figure 3: Forest plot of MR estimates (genome-wide significant genetic variants as instrumental variables).
+
+```{r echo=FALSE, include = TRUE, fig.height = 6, fig.width = 8}
+table2IVW = as.data.frame(table2IVW)
+table2IVW$Pvalue = round(table2IVW$Pvalue, digits=3)
+table2IVW$Heter.Pvalue = round(table2IVW$Heter.Pvalue, digits=3)
+forest(x=table2IVW$Estimate,ci.lb=table2IVW$CILower, ci.ub=table2IVW$CIUpper,refline=1,xlab="Odds ratio",slab=rownames(table2IVW),transf=exp, digits=3L, top=1, 
+	ilab=cbind(table2IVW$Pvalue, table2IVW$Heter.Pvalue), ilab.xpos=c(0.835,0.89), ilab.pos=4, xlim=c(0.7,1.28))
+text(c(0.7,0.831,0.886,1.148), 4.4, pos=4, c("Outcome","Pvalue","Het.Pvalue", "Estimate [CI]"),font=2)
+```
+
+
+
+<!--
+# for compilation use:
+library(knitr)
+library(markdown)
+library(rmarkdown)
+render("mr-covid19-stroke.Rmd")
+-->
+
+
+
