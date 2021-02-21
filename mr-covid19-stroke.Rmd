@@ -20,7 +20,7 @@ library(cowplot)
 #library(rmarkdown)
 ```
 
-Load the data which is provided in the Supplmentary Table 2 available from this github repository.
+Load the data which is provided in the Supplementary Table 2 available from this github repository.
 ```{r message=FALSE, warning=FALSE}
 data = read.csv("SupplementaryTable2.csv", stringsAsFactors=FALSE)
 ```
@@ -56,7 +56,7 @@ ivw_las = mr_ivw(mr_las)
 ivw_svs = mr_ivw(mr_svs)
 ```
 
-IVW results including MR estimates, their standard error, confidence interval and heterogeniety statistics.
+IVW results including MR estimates, their standard error, confidence interval and heterogeneity statistics.
 ```{r echo = FALSE, message=FALSE, warning=FALSE}
 tableIVW = matrix(nrow=4, ncol=7)
 colnames(tableIVW) = c("Estimate","StdError","CILower","CIUpper","Pvalue","Q-stat", "Heter.Pvalue")
@@ -68,15 +68,29 @@ tableIVW[4,] = c(ivw_svs$Estimate, ivw_svs$StdError, ivw_svs$CILower, ivw_svs$CI
 tableIVW
 ```
 
+In the manuscript we present the MR estimates and confidence intervalls on the odds ratio scale, where MR estimates represent the odds ratio for critical Covid-19 per unit increase in the log odds ratio of stroke phenotypes. 
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+tableOR = as.data.frame(tableIVW)
+tableOR$"Std Error" = NULL
+tableOR$Estimate = exp(tableOR$Estimate)
+tableOR$CILower = exp(tableOR$CILower)
+tableOR$CIUpper = exp(tableOR$CIUpper)
+tableOR
+```
+
+
 Figure 2: Forest plot of MR estimates. 
 
 ```{r include = TRUE, fig.height = 6, fig.width = 8}
 tableIVW = as.data.frame(tableIVW)
 tableIVW$Pvalue = round(tableIVW$Pvalue, digits=3)
 tableIVW$Heter.Pvalue = round(tableIVW$Heter.Pvalue, digits=3)
-forest(x=tableIVW$Estimate,ci.lb=tableIVW$CILower, ci.ub=tableIVW$CIUpper,refline=1,xlab="Odds ratio",slab=rownames(tableIVW),transf=exp, digits=3L, top=1, 
-	ilab=cbind(tableIVW$Pvalue, tableIVW$Heter.Pvalue), ilab.xpos=c(0.852,0.922), ilab.pos=4, xlim=c(0.7,1.3))
-text(c(0.7,0.85,0.92,1.166), 4.4, pos=4, c("Outcome","Pvalue","Het.Pvalue", "Estimate [CI]"),font=2)
+forest(x=tableIVW$Estimate,ci.lb=tableIVW$CILower, ci.ub=tableIVW$CIUpper,
+	refline=1,xlab="Odds ratio",slab=rownames(tableIVW),transf=exp, digits=2L, top=1, 
+	ilab=cbind(tableIVW$Pvalue, tableIVW$Heter.Pvalue), ilab.xpos=c(0.852,0.922), 
+	ilab.pos=4, xlim=c(0.7,1.3))
+text(c(0.7,0.85,0.92,1.166), 4.4, pos=4, 
+ c("Outcome","Pvalue","Het.Pvalue", "Estimate [CI]"),font=2)
 ```
 
 Supplementary Figure 1: Scatterplots of genetic association with the exposure (critical Covid-19) against the genetic association with the outcome (ischemic stroke).
@@ -92,15 +106,38 @@ plot_grid(m1,m2,m3,m4, labels = c('A', 'B', 'C', 'D'),nrow = 2, ncol = 2)
 
 # 3. Sensitivity (Pleiotropy robust approaches) 
 
-Compute the inverse-variance weighted (IVW) MR estimate.
+Compute as sensitivity pleiotropy-robust MR estimates.
 ```{r message=FALSE, warning=FALSE}
 sensitivity_ais = mr_allmethods(mr_ais, method = "main")
 sensitivity_ces = mr_allmethods(mr_ces, method = "main")
 sensitivity_las = mr_allmethods(mr_las, method = "main")
 sensitivity_svs = mr_allmethods(mr_svs, method = "main")
-sensitivity = rbind(sensitivity_ais$Values,sensitivity_ces$Values, sensitivity_las$Values, sensitivity_svs$Values)
+sensitivity = rbind(sensitivity_ais$Values,sensitivity_ces$Values, 
+ sensitivity_las$Values, sensitivity_svs$Values)
+colnames(sensitivity)[4:5] = c("CILower","CIUpper")
 sensitivity
 ```
+
+None of the MR-Egger estimates is significantly difference from zero.
+```{r message=FALSE, warning=FALSE}
+MREgger_intercept = sensitivity[c(5,10,15,20),]
+rownames(MREgger_intercept) = c("Ischemic stroke","Cardioembolic stroke","Large artery stroke","Small vessel stroke")
+MREgger_intercept
+```
+
+Transform estimates to the odds-ratio scale.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+sensitivityOR = list()
+sensitivityOR$Method = sensitivity$Method
+sensitivityOR$Estimate = exp(sensitivity$Estimate)
+sensitivityOR$CILower = exp(sensitivity$CILower)
+sensitivityOR$CIUpper = exp(sensitivity$CIUpper)
+sensitivityOR$"P-value" = sensitivity$"P-value"
+sensitivityOR = as.data.frame(sensitivityOR)
+sensitivityOR = sensitivityOR[-c(5,10,15,20),]
+sensitivityOR
+```
+
 
 # 4. Sensitivity (Genome-wide significant IVs)
 
@@ -118,7 +155,7 @@ ivw2_las = mr_ivw(mr2_las)
 ivw2_svs = mr_ivw(mr2_svs)
 ```
 
-IVW results including MR estimates, their standard error, confidence interval and heterogeniety statistics.
+IVW results including MR estimates, their standard error, confidence interval and heterogeneity statistics.
 ```{r echo = FALSE, message=FALSE, warning=FALSE}
 table2IVW = matrix(nrow=4, ncol=7)
 colnames(table2IVW) = c("Estimate","StdError","CILower","CIUpper","Pvalue","Q-stat", "Heter.Pvalue")
@@ -130,15 +167,30 @@ table2IVW[4,] = c(ivw2_svs$Estimate, ivw2_svs$StdError, ivw2_svs$CILower, ivw2_s
 table2IVW
 ```
 
+In the manuscript we present the MR estimates and confidence intervalls on the odds ratio scale, where MR estimates represent the odds ratio for critical Covid-19 per unit increase in the log odds ratio of stroke phenotypes. 
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+table2OR = as.data.frame(table2IVW)
+table2OR$"Std Error" = NULL
+table2OR$Estimate = exp(table2OR$Estimate)
+table2OR$CILower = exp(table2OR$CILower)
+table2OR$CIUpper = exp(table2OR$CIUpper)
+table2OR
+```
+
+
+
 Supplementary Figure 3: Forest plot of MR estimates (genome-wide significant genetic variants as instrumental variables).
 
 ```{r include = TRUE, fig.height = 6, fig.width = 8}
 table2IVW = as.data.frame(table2IVW)
 table2IVW$Pvalue = round(table2IVW$Pvalue, digits=3)
 table2IVW$Heter.Pvalue = round(table2IVW$Heter.Pvalue, digits=3)
-forest(x=table2IVW$Estimate,ci.lb=table2IVW$CILower, ci.ub=table2IVW$CIUpper,refline=1,xlab="Odds ratio",slab=rownames(table2IVW),transf=exp, digits=3L, top=1, 
-	ilab=cbind(table2IVW$Pvalue, table2IVW$Heter.Pvalue), ilab.xpos=c(0.835,0.89), ilab.pos=4, xlim=c(0.7,1.28))
-text(c(0.7,0.831,0.886,1.148), 4.4, pos=4, c("Outcome","Pvalue","Het.Pvalue", "Estimate [CI]"),font=2)
+forest(x=table2IVW$Estimate,ci.lb=table2IVW$CILower, ci.ub=table2IVW$CIUpper,
+	refline=1,xlab="Odds ratio",slab=rownames(table2IVW),transf=exp, digits=3L, top=1, 
+	ilab=cbind(table2IVW$Pvalue, table2IVW$Heter.Pvalue), ilab.xpos=c(0.835,0.89), 
+	ilab.pos=4, xlim=c(0.7,1.28))
+text(c(0.7,0.831,0.886,1.148), 4.4, pos=4, 
+ c("Outcome","Pvalue","Het.Pvalue", "Estimate [CI]"),font=2)
 ```
 
 
@@ -150,6 +202,3 @@ library(markdown)
 library(rmarkdown)
 render("mr-covid19-stroke.Rmd")
 -->
-
-
-
