@@ -1,0 +1,396 @@
+---
+title: "Mendelian randomisation: Critical Covid-19 as exposure for stroke (Additional analysis)"
+author: "Verena Zuber"
+date: "20/02/2021"
+output: pdf_document
+highlight: tango
+---
+
+
+# 1. Preparation
+
+
+Load the MendelianRandomization package for the Mendelian randomization (MR) analysis, metafor for the forestplots, cowplot for plotting and knitr and markdown for compilation.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+library(MendelianRandomization)
+library(metafor)
+library(cowplot)
+#library(knitr)
+#library(markdown)
+#library(rmarkdown)
+```
+
+Load the additional data file which is provided as Rdata file available from this github repository.
+```{r message=FALSE, warning=FALSE}
+load("additional.data.Rdata")
+```
+
+This data file contains three sets of data.
+```{r message=FALSE, warning=FALSE}
+#please uncomment to see full details
+#str(additional.data$bidirectional.MR)
+#str(additional.data$mvMR)
+#str(additional.data$c19)
+```
+
+
+# 2. Bidirectional analysis: Considering ischemic stroke as exposure
+
+Defining the mr_input objects which specify ischemic stroke and its subtypes as exposures for susceptibility to critical Covid-19.
+```{r message=FALSE, warning=FALSE}
+iv.ais = additional.data$bidirectional.MR$iv_A2.ais
+iv.ces = additional.data$bidirectional.MR$iv_A2.ces
+iv.las = additional.data$bidirectional.MR$iv_A2.las
+iv.svs = additional.data$bidirectional.MR$iv_A2.svs
+mr_ais = mr_input(by = iv.ais$beta_A2,byse = iv.ais$se_A2, 
+ bx = iv.ais$beta_ais, bxse = iv.ais$se_ais)
+mr_ces = mr_input(by = iv.ces$beta_A2,byse = iv.ces$se_A2, 
+ bx = iv.ces$beta_ces, bxse = iv.ces$se_ces)
+mr_las = mr_input(by = iv.las$beta_A2,byse = iv.las$se_A2, 
+ bx = iv.las$beta_las, bxse = iv.las$se_las)
+mr_svs = mr_input(by = iv.svs$beta_A2,byse = iv.svs$se_A2, 
+ bx = iv.svs$beta_svs, bxse = iv.svs$se_svs)
+```
+
+Compute the inverse-variance weighted (IVW) MR estimate.
+```{r message=FALSE, warning=FALSE}
+ivw_ais = mr_ivw(mr_ais)
+ivw_ces = mr_ivw(mr_ces)
+ivw_las = mr_ivw(mr_las)
+ivw_svs = mr_ivw(mr_svs)
+```
+
+IVW results including MR estimates, their standard error, confidence interval and heterogeneity statistics.
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+tableIVW = matrix(nrow=4, ncol=7)
+colnames(tableIVW) = c("Estimate","StdError","CILower","CIUpper","Pvalue","Q-stat", "Heter.Pvalue")
+rownames(tableIVW) = c("Ischemic stroke","Cardioembolic stroke","Large artery stroke","Small vessel stroke")
+tableIVW[1,] = c(ivw_ais$Estimate, ivw_ais$StdError, ivw_ais$CILower, ivw_ais$CIUpper, ivw_ais$Pvalue, ivw_ais$Heter.Stat)
+tableIVW[2,] = c(ivw_ces$Estimate, ivw_ces$StdError, ivw_ces$CILower, ivw_ces$CIUpper, ivw_ces$Pvalue, ivw_ces$Heter.Stat)
+tableIVW[3,] = c(ivw_las$Estimate, ivw_las$StdError, ivw_las$CILower, ivw_las$CIUpper, ivw_las$Pvalue, ivw_las$Heter.Stat)
+tableIVW[4,] = c(ivw_svs$Estimate, ivw_svs$StdError, ivw_svs$CILower, ivw_svs$CIUpper, ivw_svs$Pvalue, ivw_svs$Heter.Stat)
+tableIVW
+```
+
+In the manuscript we present the MR estimates and confidence intervalls on the odds ratio scale, where MR estimates represent the odds ratio for critical Covid-19 per unit increase in the log odds ratio of stroke phenotypes. 
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+tableOR = as.data.frame(tableIVW)
+tableOR$"Std Error" = NULL
+tableOR$Estimate = exp(tableOR$Estimate)
+tableOR$CILower = exp(tableOR$CILower)
+tableOR$CIUpper = exp(tableOR$CIUpper)
+tableOR
+```
+
+Figure 3: Forest plots of the bidirectional Mendelian randomization analysis illustrating the inverse-variance weighted Mendelian randomization estimate of ischemic stroke phenotypes (ischemic stroke, cardioembolic stroke, large artery stroke and small vessel stroke) as exposures on susceptibility to critical Covid-19.
+
+```{r include = TRUE, fig.height = 6, fig.width = 8}
+tableIVW = as.data.frame(tableIVW)
+tableIVW$Pvalue = round(tableIVW$Pvalue, digits=3)
+tableIVW$Heter.Pvalue = round(tableIVW$Heter.Pvalue, digits=3)
+forest(x=tableIVW$Estimate,ci.lb=tableIVW$CILower, ci.ub=tableIVW$CIUpper,refline=1, 
+ xlab="Odds ratio", slab=rownames(tableIVW),transf=exp, digits=3L, top=1, 
+	ilab=cbind(tableIVW$Pvalue, tableIVW$Heter.Pvalue), ilab.xpos=c(0.615,0.705), 
+	ilab.pos=4, xlim=c(0.35,1.48))
+text(c(0.345,0.61,0.7,1.22), 4.4, pos=4, 
+ c("Exposure","Pvalue","Het.Pvalue", "Estimate [CI]"),font=2)
+```
+
+
+# 3. Multivariable MR
+
+Information on potential genetic confounder (smoking, obesity and inflammation) is contained in the following files.
+```{r message=FALSE, warning=FALSE}
+mvMR.ais = additional.data$mvMR$mvMR.ais
+mvMR.ces = additional.data$mvMR$mvMR.ces
+mvMR.las = additional.data$mvMR$mvMR.las
+mvMR.svs = additional.data$mvMR$mvMR.svs
+```
+
+We performed multivariable MR to adjust for these potential genetic confounder, which we implemented in a multivariable weighted regression.
+```{r message=FALSE, warning=FALSE}
+#ais
+lm.ais.uni = lm(beta_ais ~ beta_A2 -1, weights = se_ais^-2, data=mvMR.ais)
+lm.ais.crp.uni = lm(beta_ais ~ beta_A2 -1, weights = se_ais^-2, 
+ data = mvMR.ais[-which(is.na(mvMR.ais$beta_crp)==TRUE),])
+lm.ais.smoking = lm(beta_ais ~ beta_A2 + beta_smoking -1, weights = se_ais^-2, 
+ data=mvMR.ais)
+lm.ais.bmi = lm(beta_ais ~ beta_A2 + beta_bmi -1, weights = se_ais^-2, data=mvMR.ais)
+lm.ais.crp = lm(beta_ais ~ beta_A2 + beta_crp -1, weights = se_ais^-2, data=mvMR.ais)
+lm.ais.joint = lm(beta_ais ~ beta_A2 + beta_smoking + beta_bmi + beta_crp -1, 
+ weights = se_ais^-2, data=mvMR.ais)
+#ces
+lm.ces.uni = lm(beta_ces ~ beta_A2 -1, weights = se_ces^-2, data=mvMR.ces)
+lm.ces.crp.uni = lm(beta_ces ~ beta_A2 -1, weights = se_ces^-2, 
+ data = mvMR.ces[-which(is.na(mvMR.ces$beta_crp)==TRUE),])
+lm.ces.smoking = lm(beta_ces ~ beta_A2 + beta_smoking -1, weights = se_ces^-2, 
+ data=mvMR.ces)
+lm.ces.bmi = lm(beta_ces ~ beta_A2 + beta_bmi -1, weights = se_ces^-2, data=mvMR.ces)
+lm.ces.crp = lm(beta_ces ~ beta_A2 + beta_crp -1, weights = se_ces^-2, data=mvMR.ces)
+lm.ces.joint = lm(beta_ces ~ beta_A2 + beta_smoking + beta_bmi + beta_crp -1, 
+ weights = se_ces^-2, data=mvMR.ces)
+#las
+lm.las.uni = lm(beta_las ~ beta_A2 -1, weights = se_las^-2, data=mvMR.las)
+lm.las.crp.uni = lm(beta_las ~ beta_A2 -1, weights = se_las^-2, 
+ data = mvMR.las[-which(is.na(mvMR.las$beta_crp)==TRUE),])
+lm.las.smoking = lm(beta_las ~ beta_A2 + beta_smoking -1, weights = se_las^-2, 
+ data=mvMR.las)
+lm.las.bmi = lm(beta_las ~ beta_A2 + beta_bmi -1, weights = se_las^-2, data=mvMR.las)
+lm.las.crp = lm(beta_las ~ beta_A2 + beta_crp -1, weights = se_las^-2, data=mvMR.las)
+lm.las.joint = lm(beta_las ~ beta_A2 + beta_smoking + beta_bmi + beta_crp -1, 
+ weights = se_las^-2, data=mvMR.las)
+#svs
+lm.svs.uni = lm(beta_svs ~ beta_A2 -1, weights = se_svs^-2, data=mvMR.svs)
+lm.svs.crp.uni = lm(beta_svs ~ beta_A2 -1, weights = se_svs^-2, 
+ data = mvMR.svs[-which(is.na(mvMR.svs$beta_crp)==TRUE),])
+lm.svs.smoking = lm(beta_svs ~ beta_A2 + beta_smoking -1, weights = se_svs^-2, 
+ data=mvMR.svs)
+lm.svs.bmi = lm(beta_svs ~ beta_A2 + beta_bmi -1, weights = se_svs^-2, data=mvMR.svs)
+lm.svs.crp = lm(beta_svs ~ beta_A2 + beta_crp -1, weights = se_svs^-2, data=mvMR.svs)
+lm.svs.joint = lm(beta_svs ~ beta_A2 + beta_smoking + beta_bmi + beta_crp -1, 
+ weights = se_svs^-2, data=mvMR.svs)
+```
+
+Create the overview table for the multivariable MR analysis.
+```{r message=FALSE, warning=FALSE}
+mvMR.out = rbind(
+summary(lm.ais.uni)$coefficients,summary(lm.ais.smoking)$coefficients[1,],
+ summary(lm.ais.bmi)$coefficients[1,],summary(lm.ais.crp)$coefficients[1,],
+ summary(lm.ais.joint)$coefficients[1,],
+ #
+ summary(lm.ces.uni)$coefficients,summary(lm.ces.smoking)$coefficients[1,], 
+ summary(lm.ces.bmi)$coefficients[1,],summary(lm.ces.crp)$coefficients[1,],
+ summary(lm.ces.joint)$coefficients[1,],
+ #
+ summary(lm.las.uni)$coefficients,summary(lm.las.smoking)$coefficients[1,], 
+ summary(lm.las.bmi)$coefficients[1,],summary(lm.las.crp)$coefficients[1,],
+ summary(lm.las.joint)$coefficients[1,],
+ #
+ summary(lm.svs.uni)$coefficients,summary(lm.svs.smoking)$coefficients[1,], 
+ summary(lm.svs.bmi)$coefficients[1,],summary(lm.svs.crp)$coefficients[1,],
+ summary(lm.svs.joint)$coefficients[1,]
+)
+rownames(mvMR.out) = c(
+ "ais.total","ais.direct.adj.smoking","ais.direct.adj.bmi",
+ "ais.direct.adj.crp","ais.direct.adj.all",
+ "ces.total","ces.direct.adj.smoking","ces.direct.adj.bmi",
+ "ces.direct.adj.crp","ces.direct.adj.all",
+ "las.total","las.direct.adj.smoking","las.direct.adj.bmi",
+ "las.direct.adj.crp","las.direct.adj.all",
+ "svs.total","svs.direct.adj.smoking","svs.direct.adj.bmi",
+ "svs.direct.adj.crp","svs.direct.adj.all"
+)
+#mvMR.out
+mvMR.out = as.data.frame(mvMR.out)
+mvMR.OR = as.data.frame(mvMR.out)
+mvMR.OR$Estimate = exp(mvMR.out$Estimate)
+mvMR.OR$CILower = exp(mvMR.out$Estimate-1.96*mvMR.out$"Std. Error")
+mvMR.OR$CIUpper = exp(mvMR.out$Estimate+1.96*mvMR.out$"Std. Error") 
+mvMR.OR$Pvalue = mvMR.OR$"Pr(>|t|)"
+mvMR.OR$"Std. Error" = NULL
+mvMR.OR$"t value" = NULL
+mvMR.OR$"Pr(>|t|)" = NULL
+mvMR.OR
+```
+
+Supplementary Figure 2: Forest plot contrasting the Mendelian randomization estimates and confidence intervals (CI) from univariable Mendelian randomization (total estimate) and multivariable Mendelian randomization accounting for potential pleiotropic pathways (direct estimate). 
+
+```{r include = TRUE, fig.height = 12, fig.width = 8}
+mvMR.out = mvMR.out[20:1,]
+outcomes = c("Ischemic stroke","Cardioembolic stroke",
+ "Large artery stroke","Small vessel stroke")
+labels = rep(c("Total estimate", "Direct (adjusted for genetically predicted smoking)", 
+ "Direct (adjusted for genetically predicted BMI)", 
+ "Direct (adjusted for genetically predicted CRP)", 
+ "Direct (adjusted for all)"),4)[20:1]
+data.rma = rma(yi=mvMR.out$Estimate,sei=mvMR.out$"Std. Error") 
+forest(data.rma,addfit=FALSE, rows=c(1:5, 7:11, 13:17, 19:23), ylim=c(0, 25), 
+ slab=labels, atransf=exp,top=1, xlab="Odds ratio", digits=3L, xlim=c(-0.5,0.33))
+ text(-0.51, c(24,18,12,6), pos=4, outcomes,font=2)
+#points(rep(-0.495,4), c(24.04,18.04,12.04,6.04), pch=21,bg="black")
+text(0.146, c(24), pos=4, c("Estimate and CI"),font=2)
+```
+
+In order to compare the model fit, we computed a likelihood ratio test which contrasts the residual sum of squares of the univariable with the multivariable MR model.
+```{r message=FALSE, warning=FALSE}
+#ais
+lrt.ais.smoking = anova(lm.ais.uni, lm.ais.smoking)
+lrt.ais.bmi = anova(lm.ais.uni, lm.ais.bmi)
+lrt.ais.crp = anova(lm.ais.crp.uni, lm.ais.crp)
+#ces
+lrt.ces.smoking = anova(lm.ces.uni, lm.ces.smoking)
+lrt.ces.bmi = anova(lm.ces.uni, lm.ces.bmi)
+lrt.ces.crp = anova(lm.ces.crp.uni, lm.ces.crp)
+#las
+lrt.las.smoking = anova(lm.las.uni, lm.las.smoking)
+lrt.las.bmi = anova(lm.las.uni, lm.las.bmi)
+lrt.las.crp = anova(lm.las.crp.uni, lm.las.crp)
+#svs
+lrt.svs.smoking = anova(lm.svs.uni, lm.svs.smoking)
+lrt.svs.bmi = anova(lm.svs.uni, lm.svs.bmi)
+lrt.svs.crp = anova(lm.svs.crp.uni, lm.svs.crp)
+```
+
+Create the table to summarize the likelihood ratio test.
+```{r message=FALSE, warning=FALSE}
+lrt.test = rbind(
+c(lrt.ais.smoking$RSS, lrt.ais.smoking$Df[2], lrt.ais.smoking$F[2], 
+ lrt.ais.smoking$"Pr(>F)"[2]), 
+c(lrt.ais.bmi$RSS, lrt.ais.bmi$Df[2], lrt.ais.bmi$F[2], 
+ lrt.ais.bmi$"Pr(>F)"[2]),
+c(lrt.ais.crp$RSS, lrt.ais.crp$Df[2], lrt.ais.crp$F[2], 
+ lrt.ais.crp$"Pr(>F)"[2]),
+c(lrt.ces.smoking$RSS, lrt.ces.smoking$Df[2], lrt.ces.smoking$F[2], 
+ lrt.ces.smoking$"Pr(>F)"[2]), 
+c(lrt.ces.bmi$RSS, lrt.ces.bmi$Df[2], lrt.ces.bmi$F[2], 
+ lrt.ces.bmi$"Pr(>F)"[2]),
+c(lrt.ces.crp$RSS, lrt.ces.crp$Df[2], lrt.ces.crp$F[2], 
+ lrt.ces.crp$"Pr(>F)"[2]),
+c(lrt.las.smoking$RSS, lrt.las.smoking$Df[2], lrt.las.smoking$F[2], 
+ lrt.las.smoking$"Pr(>F)"[2]), 
+c(lrt.las.bmi$RSS, lrt.las.bmi$Df[2], lrt.las.bmi$F[2], 
+ lrt.las.bmi$"Pr(>F)"[2]),
+c(lrt.las.crp$RSS, lrt.las.crp$Df[2], lrt.las.crp$F[2], 
+ lrt.las.crp$"Pr(>F)"[2]),
+c(lrt.svs.smoking$RSS, lrt.svs.smoking$Df[2], lrt.svs.smoking$F[2], 
+ lrt.svs.smoking$"Pr(>F)"[2]), 
+c(lrt.svs.bmi$RSS, lrt.svs.bmi$Df[2], lrt.svs.bmi$F[2], 
+ lrt.svs.bmi$"Pr(>F)"[2]),
+c(lrt.svs.crp$RSS, lrt.svs.crp$Df[2], lrt.svs.crp$F[2], 
+ lrt.svs.crp$"Pr(>F)"[2])
+)
+colnames(lrt.test) = c("RSS1", "RSS2","DF","F","p-val")
+rownames(lrt.test) = rep(c("smoking","bmi","crp"),4) 
+lrt.test
+```
+
+
+# 4. Other Covid-19 definitions from the Covid-19 host genetics initiative
+
+For the main analysis we considered the most severe definition of Covid-19 from the 5th release of the Covid-19 host genetics initiative https://www.covid19hg.org/results/r5/, which is defined as critical ill Covid-19, where a critical case is defined as an individual who was hospitalized with laboratory confirmed SARS-CoV-2 infection and required respiratory support or died. Here we present the following Covid-19 definitions: 
+- B1: Hospitalized for Covid-19 versus controls with laboratory-confirmed Covid-19
+- B2: Hospitalized for Covid-19 versus population controls
+- C2: Reported Covid-19 infection versus population controls
+
+Next we read in the data and define the mr_input objects for all three Covid-19 definitions.
+```{r message=FALSE, warning=FALSE}
+iv_B1 = additional.data$c19$iv_B1
+iv_B2 = additional.data$c19$iv_B2
+iv_C2 = additional.data$c19$iv_C2
+#
+mr_B1.ais = mr_input(bx = iv_B1$beta_B1,bxse = iv_B1$se_B1, 
+ by = iv_B1$beta_ais, byse = iv_B1$se_ais)
+mr_B1.ces = mr_input(bx = iv_B1$beta_B1,bxse = iv_B1$se_B1, 
+ by = iv_B1$beta_ces, byse = iv_B1$se_ces)
+mr_B1.las = mr_input(bx = iv_B1$beta_B1,bxse = iv_B1$se_B1, 
+ by = iv_B1$beta_las, byse = iv_B1$se_las)
+mr_B1.svs = mr_input(bx = iv_B1$beta_B1,bxse = iv_B1$se_B1, 
+ by = iv_B1$beta_svs, byse = iv_B1$se_svs)
+#
+mr_B2.ais = mr_input(bx = iv_B2$beta_B2,bxse = iv_B2$se_B2, 
+ by = iv_B2$beta_ais, byse = iv_B2$se_ais)
+mr_B2.ces = mr_input(bx = iv_B2$beta_B2,bxse = iv_B2$se_B2, 
+ by = iv_B2$beta_ces, byse = iv_B2$se_ces)
+mr_B2.las = mr_input(bx = iv_B2$beta_B2,bxse = iv_B2$se_B2, 
+ by = iv_B2$beta_las, byse = iv_B2$se_las)
+mr_B2.svs = mr_input(bx = iv_B2$beta_B2,bxse = iv_B2$se_B2, 
+ by = iv_B2$beta_svs, byse = iv_B2$se_svs)
+#
+mr_C2.ais = mr_input(bx = iv_C2$beta_C2,bxse = iv_C2$se_C2, 
+ by = iv_C2$beta_ais, byse = iv_C2$se_ais)
+mr_C2.ces = mr_input(bx = iv_C2$beta_C2,bxse = iv_C2$se_C2, 
+ by = iv_C2$beta_ces, byse = iv_C2$se_ces)
+mr_C2.las = mr_input(bx = iv_C2$beta_C2,bxse = iv_C2$se_C2, 
+ by = iv_C2$beta_las, byse = iv_C2$se_las)
+mr_C2.svs = mr_input(bx = iv_C2$beta_C2,bxse = iv_C2$se_C2, 
+ by = iv_C2$beta_svs, byse = iv_C2$se_svs)
+```
+
+Perform inverse-variance weighted MR.
+```{r message=FALSE, warning=FALSE}
+ivw_B1.ais = mr_ivw(mr_B1.ais)
+ivw_B1.ces = mr_ivw(mr_B1.ces)
+ivw_B1.las = mr_ivw(mr_B1.las)
+ivw_B1.svs = mr_ivw(mr_B1.svs)
+#
+ivw_B2.ais = mr_ivw(mr_B2.ais)
+ivw_B2.ces = mr_ivw(mr_B2.ces)
+ivw_B2.las = mr_ivw(mr_B2.las)
+ivw_B2.svs = mr_ivw(mr_B2.svs)
+#
+ivw_C2.ais = mr_ivw(mr_C2.ais)
+ivw_C2.ces = mr_ivw(mr_C2.ces)
+ivw_C2.las = mr_ivw(mr_C2.las)
+ivw_C2.svs = mr_ivw(mr_C2.svs)
+```
+
+Create the output table.
+```{r message=FALSE, warning=FALSE}
+tableC19 = matrix(nrow=12, ncol=7)
+colnames(tableC19) = c("Estimate","StdError","CILower","CIUpper",
+ "Pvalue","Q-stat", "Heter.Pvalue")
+rownames(tableC19) = rep(c("Ischemic stroke","Cardioembolic stroke",
+ "Large artery stroke","Small vessel stroke"),3)
+#B1
+tableC19[1,] = c(ivw_B1.ais$Estimate, ivw_B1.ais$StdError, 
+ ivw_B1.ais$CILower, ivw_B1.ais$CIUpper, ivw_B1.ais$Pvalue, ivw_B1.ais$Heter.Stat)
+tableC19[2,] = c(ivw_B1.ces$Estimate, ivw_B1.ces$StdError, 
+ ivw_B1.ces$CILower, ivw_B1.ces$CIUpper, ivw_B1.ces$Pvalue, ivw_B1.ces$Heter.Stat)
+tableC19[3,] = c(ivw_B1.las$Estimate, ivw_B1.las$StdError, 
+ ivw_B1.las$CILower, ivw_B1.las$CIUpper, ivw_B1.las$Pvalue, ivw_B1.las$Heter.Stat)
+tableC19[4,] = c(ivw_B1.svs$Estimate, ivw_B1.svs$StdError, 
+ ivw_B1.svs$CILower, ivw_B1.svs$CIUpper, ivw_B1.svs$Pvalue, ivw_B1.svs$Heter.Stat)
+#B2
+tableC19[5,] = c(ivw_B2.ais$Estimate, ivw_B2.ais$StdError, 
+ ivw_B2.ais$CILower, ivw_B2.ais$CIUpper, ivw_B2.ais$Pvalue, ivw_B2.ais$Heter.Stat)
+tableC19[6,] = c(ivw_B2.ces$Estimate, ivw_B2.ces$StdError, 
+ ivw_B2.ces$CILower, ivw_B2.ces$CIUpper, ivw_B2.ces$Pvalue, ivw_B2.ces$Heter.Stat)
+tableC19[7,] = c(ivw_B2.las$Estimate, ivw_B2.las$StdError, 
+ ivw_B2.las$CILower, ivw_B2.las$CIUpper, ivw_B2.las$Pvalue, ivw_B2.las$Heter.Stat)
+tableC19[8,] = c(ivw_B2.svs$Estimate, ivw_B2.svs$StdError,  
+ ivw_B2.svs$CILower, ivw_B2.svs$CIUpper, ivw_B2.svs$Pvalue, ivw_B2.svs$Heter.Stat)
+#C2
+tableC19[ 9,] = c(ivw_C2.ais$Estimate, ivw_C2.ais$StdError, 
+ ivw_C2.ais$CILower, ivw_C2.ais$CIUpper, ivw_C2.ais$Pvalue, ivw_C2.ais$Heter.Stat)
+tableC19[10,] = c(ivw_C2.ces$Estimate, ivw_C2.ces$StdError, 
+ ivw_C2.ces$CILower, ivw_C2.ces$CIUpper, ivw_C2.ces$Pvalue, ivw_C2.ces$Heter.Stat)
+tableC19[11,] = c(ivw_C2.las$Estimate, ivw_C2.las$StdError, 
+ ivw_C2.las$CILower, ivw_C2.las$CIUpper, ivw_C2.las$Pvalue, ivw_C2.las$Heter.Stat)
+tableC19[12,] = c(ivw_C2.svs$Estimate, ivw_C2.svs$StdError, 
+ ivw_C2.svs$CILower, ivw_C2.svs$CIUpper, ivw_C2.svs$Pvalue, ivw_C2.svs$Heter.Stat)
+#
+#tableC19
+```
+
+In the manuscript we present the MR estimates and confidence intervalls on the odds ratio scale, where MR estimates represent the odds ratio for critical Covid-19 per unit increase in the log odds ratio of stroke phenotypes. 
+```{r echo = FALSE, message=FALSE, warning=FALSE}
+tableOR = as.data.frame(tableC19)
+tableOR$"StdError" = NULL
+tableOR$Estimate = exp(tableOR$Estimate)
+tableOR$CILower = exp(tableOR$CILower)
+tableOR$CIUpper = exp(tableOR$CIUpper)
+tableOR
+```
+
+Supplementary Figure 4: Forest plot for other Covid-19 definitions
+```{r include = TRUE, fig.height = 11, fig.width = 8}
+data = tableC19[12:1,]
+data = as.data.frame(data)
+data$Pvalue = round(data$Pvalue, digits=3)
+data$Heter.Pvalue = round(data$Heter.Pvalue, digits=3)
+data.rma = rma(yi=as.numeric(data$Estimate),sei=as.numeric(data$StdError)) 
+forest(data.rma,addfit=FALSE, rows=c(1:4, 6:9, 11:14), ylim=c(1, 15.5), 
+ slab=rownames(tableC19), atransf=exp,top=1, xlab="Odds ratio", digits=3L, xlim=c(-0.45,0.9))
+text(-0.46, c(15,10,5), pos=4, 
+c("Hospitalized Covid-19 vs. not hospitalized Covid-19",
+ "Hospitalized Covid-19 vs. population","Covid-19 vs. population"),font=2)
+text(c(0.6), 15, pos=4, c("Estimate and CI"),font=2)
+```
+
+<!--
+# for compilation use:
+library(knitr)
+library(markdown)
+library(rmarkdown)
+render("mr-additional-analysis.Rmd")
+-->
